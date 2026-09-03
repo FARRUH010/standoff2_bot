@@ -3,6 +3,8 @@ import sqlite3
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 
 # --- НАСТРОЙКИ ---
 TOKEN = "8938746737:AAHQHn_fDWqOZ9wKPs6SQZ8Rg3wbVp4Vgv0"
@@ -11,6 +13,10 @@ RATE_PER_GOLD = 0.12  # Курс: 1 Gold = 0.12 сомони
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+# --- СОСТОЯНИЯ (FSM) ---
+class WithdrawState(StatesGroup):
+    waiting_for_amount = State()
 
 # --- БАЗА ДАННЫХ ---
 def init_db():
@@ -57,14 +63,15 @@ main_kb = ReplyKeyboardMarkup(
 
 contact_admin_kb = InlineKeyboardMarkup(
     inline_keyboard=[
-        [InlineKeyboardButton(text="📲 Отправить чек админу", url="https://t.me/Farruh_10")]
+        [InlineKeyboardButton(text="📲 Отправить чек/скриншот админу", url="https://t.me/standoff2shop_tj_admin")]
     ]
 )
 
 # --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
 
 @dp.message(Command("start"))
-async def start_handler(message: types.Message):
+async def start_handler(message: types.Message, state: FSMContext):
+    await state.clear()
     get_balance(message.from_user.id)
     await message.answer(
         f"👋 Салом, {message.from_user.first_name}!\n\n"
@@ -75,7 +82,8 @@ async def start_handler(message: types.Message):
     )
 
 @dp.message(F.text == "👤 Мой кабинет")
-async def profile_handler(message: types.Message):
+async def profile_handler(message: types.Message, state: FSMContext):
+    await state.clear()
     balance = get_balance(message.from_user.id)
     await message.answer(
         f"👤 **Ваш профиль:**\n\n"
@@ -85,25 +93,77 @@ async def profile_handler(message: types.Message):
     )
 
 @dp.message(F.text == "💳 Пополнить Gold")
-async def deposit_handler(message: types.Message):
+async def deposit_handler(message: types.Message, state: FSMContext):
+    await state.clear()
     await message.answer(
         "📝 Введите количество **Gold**, которое хотите приобрести (например, `100`):",
         parse_mode="Markdown"
     )
 
 @dp.message(F.text == "🛒 Купить Gold")
-async def buy_handler(message: types.Message):
+async def buy_handler(message: types.Message, state: FSMContext):
     balance = get_balance(message.from_user.id)
+    if balance <= 0:
+        await message.answer("❌ На вашем балансе недостаточно Gold! Сначала пополните счет.")
+        return
+    
+    await state.set_state(WithdrawState.waiting_for_amount)
     await message.answer(
-        f"🛒 **Магазин Gold**\n\n"
-        f"Доступный баланс: **{balance} G**\n\n"
-        f"Для оформления вывода или покупки свяжитесь с администратором.",
-        reply_markup=contact_admin_kb,
+        f"🛒 **Вывод Gold**\n\n"
+        f"Доступный баланс: **{balance} G**\n"
+        f"Введите количество **Gold**, которое хотите вывести в игру:",
         parse_mode="Markdown"
     )
 
+@dp.message(WithdrawState.waiting_for_amount)
+async def process_withdrawal(message: types.Message, state: FSMContext):
+    if not message.text.isdigit():
+        await message.answer("Пожалуйста, введите корректное число.")
+        return
+    
+    desired_gold = float(message.text)
+    balance = get_balance(message.from_user.id)
+
+    if desired_gold <= 0:
+        await message.answer("Число должно быть больше 0.")
+        return
+
+    if desired_gold > balance:
+        await message.answer(f"❌ У вас недостаточно Gold! Доступно: **{balance} G**.")
+        return
+
+    # Комиссия рынка Standoff 2 — 20%
+    market_price = round(desired_gold / 0.8, 2)
+    
+    await state.clear()
+
+    caption = (
+        f"✨ Для получения голды выставьте на рынок **USP CORRODE** С НАКЛЕЙКОЙ за "
+        f"**{market_price}G**, чтобы вам пришло **{desired_gold}G** - это количество голды, "
+        f"которое вы хотите вывести (комиссия рынка на мне).\n\n"
+        f"📝 Далее нажмите на «Только мои запросы», сделайте скриншот и отправьте в бота / админу.\n\n"
+        f"❗️ Пожалуйста, не меняйте аватарку и цену скина, пока выводится голда."
+    )
+
+    PHOTO_URL = "https://raw.githubusercontent.com/FARRUH010/standoff2_bot/main/guide.jpg"
+    
+    try:
+        await message.answer_photo(
+            photo=PHOTO_URL,
+            caption=caption,
+            reply_markup=contact_admin_kb,
+            parse_mode="Markdown"
+        )
+    except Exception:
+        await message.answer(
+            caption,
+            reply_markup=contact_admin_kb,
+            parse_mode="Markdown"
+        )
+
 @dp.message(F.text == "ℹ️ Помощь")
-async def help_handler(message: types.Message):
+async def help_handler(message: types.Message, state: FSMContext):
+    await state.clear()
     await message.answer(
         "ℹ️ **Служба поддержки**\n\n"
         "По всем вопросам оплаты, пополнения и получения Gold обращайтесь к администратору:",
