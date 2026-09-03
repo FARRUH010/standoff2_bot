@@ -63,7 +63,7 @@ main_kb = ReplyKeyboardMarkup(
 
 contact_admin_kb = InlineKeyboardMarkup(
     inline_keyboard=[
-        [InlineKeyboardButton(text="📲 Отправить чек/скриншот админу", url="https://t.me/standoff2shop_tj_admin")]
+        [InlineKeyboardButton(text="📲 Отправить чек/скриншот админу", url="https://t.me/Farruh_10")]
     ]
 )
 
