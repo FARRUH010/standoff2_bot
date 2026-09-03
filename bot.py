@@ -1,8 +1,9 @@
 import asyncio
+import os
 import sqlite3
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -145,16 +146,15 @@ async def process_withdrawal(message: types.Message, state: FSMContext):
         f"❗️ Пожалуйста, не меняйте аватарку и цену скина, пока выводится голда."
     )
 
-    PHOTO_URL = "https://raw.githubusercontent.com/FARRUH010/standoff2_bot/main/guide.jpg"
-    
-    try:
+    if os.path.exists("guide.jpg"):
+        photo = FSInputFile("guide.jpg")
         await message.answer_photo(
-            photo=PHOTO_URL,
+            photo=photo,
             caption=caption,
             reply_markup=contact_admin_kb,
             parse_mode="Markdown"
         )
-    except Exception:
+    else:
         await message.answer(
             caption,
             reply_markup=contact_admin_kb,
